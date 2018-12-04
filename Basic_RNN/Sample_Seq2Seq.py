@@ -2,27 +2,9 @@ import tensorflow as tf
 import numpy as np
 import os
 from tensorflow.nn.rnn_cell import GRUCell, DropoutWrapper, MultiRNNCell
-from tensorflow.contrib.seq2seq import LuongAttention, AttentionWrapper, GreedyEmbeddingHelper, TrainingHelper
-from load_preprocess_revised import sr_seq_leg, sr_inputs, sr_dict
-from load_preprocess_revised import tgt_seq_leg, tgt_inputs, tgt_label, tgt_dict, max_tgt_seq_leg
+from tensorflow.contrib.seq2seq import LuongAttention, AttentionWrapper, GreedyEmbeddingHelper, TrainingHelper, sequence_loss
 
 cwd = os.getcwd()
-
-def as_array(data, idx):
-    return np.asarray([data[i] for i in idx])
-
-def next_batch(batch_size, data, labels, tgt_label, data_seq_leg, labels_seq_leg):
-
-    idx = np.arange(0 , len(data))
-    np.random.shuffle(idx)
-    idx = idx[:batch_size]
-    data_shuffle = as_array(data, idx)
-    labels_shuffle = as_array(labels, idx)
-    tgt_labels_shuffle = as_array(tgt_label, idx)
-    data_seq_leg_shuffle = as_array(data_seq_leg, idx)
-    labels_seq_leg_shuffle = as_array(labels_seq_leg, idx)
-
-    return data_shuffle, labels_shuffle, tgt_labels_shuffle, data_seq_leg_shuffle, labels_seq_leg_shuffle
 
 class Seq2Seq(object):
 
@@ -30,24 +12,25 @@ class Seq2Seq(object):
         self.num_units = 128
         self.num_layers = 3
         self.batch_size = 100
-        self.n_epoch = 1000
-        self.embed_size = 30
+        self.max_feature = 100
+        self.max_dec_leg = 10
+        self.max_enc_leg = 10
 
-    def model(self, x, enc_vocab_size, enc_embed_size, enc_seq_leg,
-              y, dec_vocab_size, dec_embed_size,
-              dec_seq_leg, input_keep_prob, inference=False):
+        self.enc_data = tf.placeholder(tf.int32, [self.batch_size, self.max_enc_leg], name='enc_data')
+        self.dec_data = tf.placeholder(tf.int32, [self.batch_size, self.max_dec_leg + 1], name='dec_data') #START WITH <GO>
+        self.dec_label = tf.placeholder(tf.int32, [self.batch_size, self.max_dec_leg + 1], name='dec_label') #END OF <EOS>
+        self.enc_seq_leg = tf.placeholder(tf.int32, [self.batch_size], name='enc_seq_leg')
+        self.dec_seq_leg = tf.placeholder(tf.int32, [self.batch_size], name='dec_seq_leg')
+        self.input_keep_prob = tf.placeholder(tf.float32)
+
+    def main(self, x, enc_vocab_size, enc_seq_leg,
+                   y, dec_vocab_size, dec_seq_leg, input_keep_prob,
+                   enc_embed_size=300,dec_embed_size=300):
 
         #embeding
-        enc_inputs = tf.contrib.layers.embed_sequence(x,
-                                                      enc_vocab_size,
-                                                      enc_embed_size)
-        #enc_inputsは以下のように書けます
-        #enc_embed = tf.random_uniform([vocab_size, embed_size])
-        #enc_inputs = tf.nn.embedding_lookup(params=enc_embed, ids=x)
+        enc_inputs = tf.contrib.layers.embed_sequence(x, enc_vocab_size, enc_embed_size)
 
         print('Start encoder')
-
-
         enc_outputs, enc_states = self._enc_layer(enc_inputs,
                                                   num_units=self.num_units,
                                                   num_layers=self.num_layers,
@@ -69,7 +52,7 @@ class Seq2Seq(object):
                                     scope='dec_cell')
 
         dec_cells = AttentionWrapper(dec_cells, attention_mechanism)
-        dec_initial_state = dec_cells.zero_state(self.batch_size, tf.float32).clone(cell_state=enc_states)
+        dec_init_state = dec_cells.zero_state(self.batch_size, tf.float32).clone(cell_state=enc_states)
 
         print('Start decoder')
         output_layer = tf.layers.Dense(dec_vocab_size)
@@ -78,19 +61,19 @@ class Seq2Seq(object):
             train_helper = TrainingHelper(dec_inputs, sequence_length=dec_seq_leg)
 
             dec_train_outputs = self._dec_layer(dec_cells,
-                                                dec_initial_state,
+                                                dec_init_state,
                                                 train_helper,
                                                 output_layer,
                                                 scope='dec_train')
 
 
-        with tf.variable_scope('prediction'):
+        with tf.variable_scope('inference'):
             infer_helper = GreedyEmbeddingHelper(dec_embed,
                                                  tf.fill([self.batch_size], tgt_dict['<GO>']),
                                                  tgt_dict['<EOS>'])
 
             dec_infer_outputs = self._dec_layer(dec_cells,
-                                                dec_initial_state,
+                                                dec_init_state,
                                                 infer_helper,
                                                 output_layer,
                                                 scope='dec_infer',
@@ -98,13 +81,23 @@ class Seq2Seq(object):
 
         return dec_train_outputs, dec_infer_outputs
 
-    def cost(self, outputs, label):
-        crossent = tf.nn.sparse_softmax_cross_entropy_with_logits(labels=label, logits=outputs)
-        cost = tf.reduce_mean(crossent)
+    def loss(self, logitss, labels, max_dec_leg):
+        """
+        same code as below
 
-        return cost
+        mask = tf.sequence_mask(labels, max_dec_leg, dtype=tf.float32)
+        target_weight = tf.cast(mask, dtype=tf.float32)#[batch_size, max_dec_leg]
+        crossentroy = tf.sparse_softmax_cross_entropy_with_logits(logits=logits, labels=labels)
+        loss = (tf.reduce_sum(crossentroy*target_weight)/batch_size)
+
+        """
+
+        mask = tf.sequence_mask(labels, max_dec_leg, dtype=tf.float32)
+        loss = sequence_loss(logits, labels, mask)
+        return loss
 
     def training(self, cost):
+
         max_gradient_norm = 1
         optimizer = tf.train.AdamOptimizer(learning_rate=0.001)
         params = tf.trainable_variables()
@@ -114,32 +107,23 @@ class Seq2Seq(object):
 
         return training_op
 
-    def train(self):
+    def build(self):
 
-        enc_vocab_size = len(sr_dict)
-        dec_vocab_size = len(tgt_dict)
+        enc_vocab_size = 10000
+        dec_vocab_size = 10000
 
-        enc_data = tf.placeholder(tf.int32, [None, None], name='enc_data')
-        dec_data = tf.placeholder(tf.int32, [None, None], name='dec_data')
-        dec_label = tf.placeholder(tf.int32, [None, None], name='dec_label')
-        enc_seq_leg = tf.placeholder(tf.int32, [None], name='enc_seq_leg')
-        dec_seq_leg = tf.placeholder(tf.int32, [None], name='dec_seq_leg')
-
-        input_keep_prob = tf.placeholder(tf.float32)
-
-        logits, infer_output = self.model(enc_data, enc_vocab_size, self.embed_size, enc_seq_leg,
-                                        dec_data, dec_vocab_size, self.embed_size,
-                                        dec_seq_leg, input_keep_prob)
+        logits, infer_output = self.model(self.enc_data, enc_vocab_size, self.enc_seq_leg,
+                                          self.dec_data, dec_vocab_size, self.dec_seq_leg, input_keep_prob)
 
         predictions = tf.identity(infer_output.sample_id, name='predictions')
-        cost = self.cost(logits.rnn_output, dec_label)
+        cost = self.cost(logits.rnn_output, dec_label, self.max_dec_leg)
         training_op = self.training(cost)
         saver = tf.train.Saver()
 
         min_loss = None
         with tf.Session() as sess:
             print("start train")
-            init = tf.global_variables_initializer()
+            init = tf.global_variables_initizer()
             sess.run(init)
 
             for epoch in range(self.n_epoch):

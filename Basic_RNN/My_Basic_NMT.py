@@ -140,14 +140,3 @@ with tf.variable_scope('Optimization') as scope:
     loss = tf.reduce_mean(crossent)
     Optimizer = tf.train.AdamOptimizer(1e-4)
     train_op = Optimizer.minimize(loss)
-
-with tf.Session() as sess:
-    sess.run(tf.global_variables_initializer())
-
-    #result = sess.run(train_output, feed_dict={encode_inputs:source_inputs[:,:3], decode_data:target_data[:3], batch_size:3, decoder_sequence_length:target_sequence_length[:3]})
-    output = sess.run(prediction, feed_dict={encode_inputs:source_inputs[:,:3],
-                                               decode_data:target_data[:,:3],
-                                               batch_size: 3,
-                                               decoder_sequence_length: target_sequence_length[:3]})
-
-    print(output)
