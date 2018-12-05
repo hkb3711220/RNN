@@ -72,12 +72,12 @@ class trainer():
 
                     print('Epoch:', epoch, ' No:', i, 'train loss:', train_loss, 'train accuracy:', train_accuracy)
 
-                if epoch % 10 == 0:
-                    test_loss, test_accuracy = sess.run([self.loss, self.accuracy],
-                                                        feed_dict={self.enc_data:X_test, self.dec_data:y_input_test,
-                                                                   self.dec_label:y_label_test, self.enc_seq_leg:enc_leg_test,
-                                                                   self.dec_seq_leg:dec_leg_test, self.input_keep_prob:1.0})
+                #if epoch % 10 == 0:
+                    #test_loss, test_accuracy = sess.run([self.loss, self.accuracy],
+                                                        #feed_dict={self.enc_data:X_test, self.dec_data:y_input_test,
+                                                                   #self.dec_label:y_label_test, self.enc_seq_leg:enc_leg_test,
+                                                                   #self.dec_seq_leg:dec_leg_test, self.input_keep_prob:1.0})
 
-                    print(test_loss, test_accuracy)
+                    #print(test_loss, test_accuracy)
 
 trainer().train()
