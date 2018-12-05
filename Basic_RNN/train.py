@@ -13,23 +13,21 @@ class trainer():
     def __init__(self):
 
         self.n_epoch = 1
-        self.batch_size = 100
+        self.batch_size = 500
         self.fr_enc_vocab, self.fr_enc_seq_leg, self.max_fr_enc_leg, self.fr_enc_data = gen_data(language_name='fr')
         self.en_dec_vocab, self.en_dec_seq_leg, self.max_en_dec_leg, self.en_dec_data, self.en_dec_label = gen_data(language_name='en', decode=True)
 
-        self.enc_data = tf.placeholder(tf.int32, [self.batch_size, self.max_fr_enc_leg], name='enc_data')
-        self.dec_data = tf.placeholder(tf.int32, [self.batch_size, self.max_en_dec_leg+1], name='dec_data') #START WITH <GO>
-        self.dec_label = tf.placeholder(tf.int32, [self.batch_size, self.max_en_dec_leg+1], name='dec_label') #END OF <EOS>
-        self.enc_seq_leg = tf.placeholder(tf.int32, [self.batch_size], name='enc_seq_leg')
-        self.dec_seq_leg = tf.placeholder(tf.int32, [self.batch_size], name='dec_seq_leg')
+        self.enc_data = tf.placeholder(tf.int32, [None, self.max_fr_enc_leg], name='enc_data')
+        self.dec_data = tf.placeholder(tf.int32, [None, self.max_en_dec_leg+1], name='dec_data') #START WITH <GO>
+        self.dec_label = tf.placeholder(tf.int32, [None, self.max_en_dec_leg], name='dec_label')
+        self.enc_seq_leg = tf.placeholder(tf.int32, [None], name='enc_seq_leg')
+        self.dec_seq_leg = tf.placeholder(tf.int32, [None], name='dec_seq_leg')
 
         self.input_keep_prob = tf.placeholder(tf.float32)
         self.Seq2Seq = Seq2Seq(self.batch_size)
-        self.train_output, self.infer_output = self.Seq2Seq.main(self.enc_data, len(self.fr_enc_vocab), self.enc_seq_leg,
+        self.train_output, self.infer_output = self.Seq2Seq.main(self.enc_data, len(self.fr_enc_vocab)+1, self.enc_seq_leg,
                                                                  self.dec_data, len(self.en_dec_vocab), self.dec_seq_leg,
                                                                  self.input_keep_prob, self.max_en_dec_leg)
-
-        print(self.train_output.rnn_output)
 
         self.loss = self.Seq2Seq.loss(self.train_output.rnn_output, self.dec_label, self.dec_seq_leg, self.max_en_dec_leg)
         tf.summary.scalar('loss', self.loss)
@@ -44,19 +42,26 @@ class trainer():
         with tf.Session() as sess:
             sess.run(init)
             merged = tf.summary.merge_all()
-            writer = tf.summary.FileWriter(cwd  + '/log', sess.graph)
+            #writer = tf.summary.FileWriter(cwd  + '/log', sess.graph)
 
             X_train, X_test = self.fr_enc_data[:110000, :], self.fr_enc_data[110000:, :]
             y_input_train, y_input_test = self.en_dec_data[:110000, :], self.en_dec_data[110000:, :]
             y_label_train, y_label_test = self.en_dec_label[:110000, :], self.en_dec_label[110000:, :]
-            enc_leg_train, enc_leg_test = self.fr_enc_seq_leg[:110000], self.fr_enc_seq_leg[11000:]
-            dec_leg_train, dec_leg_test = self.en_dec_seq_leg[:110000], self.en_dec_seq_leg[11000:]
+            enc_leg_train, enc_leg_test = self.fr_enc_seq_leg[:110000], self.fr_enc_seq_leg[110000:]
+            dec_leg_train, dec_leg_test = self.en_dec_seq_leg[:110000], self.en_dec_seq_leg[110000:]
+
+            print(X_test.shape)
+            print(y_input_test.shape)
+            print(y_label_test.shape)
+            print(len(enc_leg_test))
+            print(len(dec_leg_test))
+            exit()
 
             for epoch in range(self.n_epoch):
                 for i in range(X_train.shape[0] // self.batch_size):
                     X_batch = X_train[self.batch_size*i:self.batch_size*(i+1), :]
                     y_input_batch = y_input_train[self.batch_size*i : self.batch_size*(i+1), :]
-                    y_label_batch = y_input_train[self.batch_size*i : self.batch_size*(i+1), :]
+                    y_label_batch = y_label_train[self.batch_size*i : self.batch_size*(i+1), :]
                     enc_leg_batch = enc_leg_train[self.batch_size*i : self.batch_size*(i+1)]
                     dec_leg_batch = dec_leg_train[self.batch_size*i : self.batch_size*(i+1)]
 
@@ -68,10 +73,11 @@ class trainer():
                     print('Epoch:', epoch, ' No:', i, 'train loss:', train_loss, 'train accuracy:', train_accuracy)
 
                 if epoch % 10 == 0:
-                    test_loss, test_accuracy = sess.run([self.loss, self.accuracy], feed_dict={self.enc_data:X_test, self.dec_data:y_input_test,
-                                                                         self.dec_label:y_label_test, self.enc_seq_leg:enc_leg_test,
-                                                                         self.dec_seq_leg:dec_leg_test, self.input_keep_prob:1.0})
+                    test_loss, test_accuracy = sess.run([self.loss, self.accuracy],
+                                                        feed_dict={self.enc_data:X_test, self.dec_data:y_input_test,
+                                                                   self.dec_label:y_label_test, self.enc_seq_leg:enc_leg_test,
+                                                                   self.dec_seq_leg:dec_leg_test, self.input_keep_prob:1.0})
 
-                    print(test_accuracy)
+                    print(test_loss, test_accuracy)
 
 trainer().train()

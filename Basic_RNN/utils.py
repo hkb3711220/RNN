@@ -16,7 +16,7 @@ def add_start_symbol(word_index, offset_data):
     go_index = np.expand_dims(go_index.T, 1)
 
 
-    offset_data = offset_data[:, :-1]
+    #offset_data = offset_data[:, :-1]
     offset_data_with_start = np.concatenate([go_index, offset_data], axis=1)
 
     return offset_data_with_start
@@ -53,9 +53,10 @@ def gen_data(language_name, decode=False):
     max_len = max(seq_leg) #the max length of sequence
 
     if decode:
-        offset_data = pad_sequences(data, maxlen=max_len+1)
+        offset_data = pad_sequences(data, maxlen=max_len)
         offset_data = np.fliplr(offset_data)
         offset_data_with_start = add_start_symbol(word_index, offset_data)
+        word_index[0] = '<GO>'
 
         return word_index, seq_leg, max_len, offset_data_with_start, offset_data
 

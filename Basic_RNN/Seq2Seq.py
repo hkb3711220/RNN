@@ -63,7 +63,9 @@ class Seq2Seq(object):
                 The decoding (translation) process is started as soon as the decoder receives a starting
                 symbol "<s>" (refer as tgt_sos_id in our code);
                 For each timestep on the decoder side, we treat the RNN's output as a set of logits.
-                We choose the most likely word, the id associated with the maximum logit value, as the emitted word (this is the "greedy" behavior). For example in Figure 3, the word "moi" has the highest translation probability in the first decoding step. We then feed this word as input to the next timestep.
+                We choose the most likely word, the id associated with the maximum logit value, as the emitted word (this is the "greedy" behavior). 
+                For example in Figure 3, the word "moi" has the highest translation probability in the first decoding step. 
+                We then feed this word as input to the next timestep.
                 The process continues until the end-of-sentence marker "</s>" is produced as an output symbol (refer as tgt_eos_id in our code).
 
                """
@@ -91,7 +93,7 @@ class Seq2Seq(object):
         loss = (tf.reduce_sum(crossentroy*target_weight)/batch_size)
 
         """
-        mask = tf.sequence_mask(dec_seq_leg, max_dec_leg+1, dtype=tf.float32)
+        mask = tf.sequence_mask(dec_seq_leg, max_dec_leg, dtype=tf.float32)
         loss = sequence_loss(logits, labels, mask)
 
         return loss
@@ -156,9 +158,10 @@ class Seq2Seq(object):
             if Infer:
                 outputs, _, _ = tf.contrib.seq2seq.dynamic_decode(dec,
                                                                   impute_finished=True,
-                                                                  maximum_iterations=max_tgt_seq_leg+1)
+                                                                  maximum_iterations=max_tgt_seq_leg)
             else:
                 outputs, _, _ = tf.contrib.seq2seq.dynamic_decode(dec,
-                                                                  impute_finished=True)
+                                                                  impute_finished=True,
+                                                                  maximum_iterations=max_tgt_seq_leg)
 
         return outputs
