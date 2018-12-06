@@ -56,7 +56,6 @@ def gen_data(language_name, decode=False):
         offset_data = pad_sequences(data, maxlen=max_len)
         offset_data = np.fliplr(offset_data)
         offset_data_with_start = add_start_symbol(word_index, offset_data)
-        word_index[0] = '<GO>'
 
         return word_index, seq_leg, max_len, offset_data_with_start, offset_data
 

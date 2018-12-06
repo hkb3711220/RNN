@@ -8,9 +8,8 @@ cwd = os.getcwd()
 
 class Seq2Seq(object):
 
-    def __init__(self, batch_size):
+    def __init__(self):
 
-        self.batch_size=batch_size
         self.num_units = 128
         self.num_layers = 3
         self.max_feature = 100
@@ -19,7 +18,7 @@ class Seq2Seq(object):
 
     def main(self, x, enc_vocab_size, enc_seq_leg,
                    y, dec_vocab_size, dec_seq_leg, input_keep_prob, max_tgt_seq_leg,
-                   enc_embed_size=300,dec_embed_size=300):
+                   batch_size, enc_embed_size=300,dec_embed_size=300):
 
         #embeding
         enc_inputs = tf.contrib.layers.embed_sequence(x, enc_vocab_size, enc_embed_size)
@@ -43,7 +42,7 @@ class Seq2Seq(object):
                                     scope='dec_cell')
 
         dec_cells = AttentionWrapper(dec_cells, attention_mechanism)
-        dec_init_state = dec_cells.zero_state(self.batch_size, tf.float32).clone(cell_state=enc_states)
+        dec_init_state = dec_cells.zero_state(batch_size, tf.float32).clone(cell_state=enc_states)
         output_layer = tf.layers.Dense(dec_vocab_size, use_bias=False)
 
         with tf.variable_scope('train'):
@@ -63,13 +62,13 @@ class Seq2Seq(object):
                 The decoding (translation) process is started as soon as the decoder receives a starting
                 symbol "<s>" (refer as tgt_sos_id in our code);
                 For each timestep on the decoder side, we treat the RNN's output as a set of logits.
-                We choose the most likely word, the id associated with the maximum logit value, as the emitted word (this is the "greedy" behavior). 
-                For example in Figure 3, the word "moi" has the highest translation probability in the first decoding step. 
+                We choose the most likely word, the id associated with the maximum logit value, as the emitted word (this is the "greedy" behavior).
+                For example in Figure 3, the word "moi" has the highest translation probability in the first decoding step.
                 We then feed this word as input to the next timestep.
                 The process continues until the end-of-sentence marker "</s>" is produced as an output symbol (refer as tgt_eos_id in our code).
 
                """
-            infer_helper = GreedyEmbeddingHelper(dec_embed,tf.fill([self.batch_size], self.start_token),self.end_token)
+            infer_helper = GreedyEmbeddingHelper(dec_embed,tf.fill([batch_size], self.start_token),self.end_token)
 
             dec_infer_outputs = self._dec_layer(dec_cells,
                                                 dec_init_state,
